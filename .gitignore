@@ -4,6 +4,7 @@ test/k8s-integration/src/
 
 # Personal testing
 /my_test/
+cloud-sa.json
 
 # Binaries for programs and plugins
 *.exe
@@ -16,6 +17,7 @@ test/k8s-integration/src/
 
 # Kubernetes Integration Test YAML
 test/k8s-integration/config/test-config.yaml
+deploy/kubernetes/base/kustomization.yaml
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
