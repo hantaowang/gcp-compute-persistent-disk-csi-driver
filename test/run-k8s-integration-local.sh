@@ -5,7 +5,7 @@ set -o errexit
 
 readonly PKGDIR=${GOPATH}/src/sigs.k8s.io/gcp-compute-persistent-disk-csi-driver
 readonly gke_cluster_version=${GKE_CLUSTER_VERSION:-latest}
-readonly kube_version=${KUBE_VERSION:-master}
+readonly kube_version=${GCE_PD_KUBE_VERSION:-master}
 readonly test_version=${TEST_VERSION:-master}
 
 source "${PKGDIR}/deploy/common.sh"
