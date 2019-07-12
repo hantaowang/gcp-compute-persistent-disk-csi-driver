@@ -583,3 +583,8 @@ func TestConcurrentNodeOperations(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
+
+func TestPreExistingMount(t *testing.T) {
+	// TODO: Write test to verify Mount
+	return
+}

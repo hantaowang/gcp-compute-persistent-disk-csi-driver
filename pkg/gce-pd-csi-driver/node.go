@@ -242,26 +242,23 @@ func (ns *GCENodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStage
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("VolumeCapability is invalid: %v", err))
 	}
 
-	// TODO(#253): Check volume capability matches for ALREADY_EXISTS
-
-	volumeKey, err := common.VolumeIDToKey(volumeID)
-	if err != nil {
-		return nil, err
+	// If it is a block mount, return a nop
+	if blk := volumeCapability.GetBlock(); blk != nil {
+		// TODO: Validate that the device is a block device
+		return &csi.NodeStageVolumeResponse{}, nil
 	}
 
 	// Part 1: Get device path of attached device
 	partition := ""
-
 	if part, ok := req.GetVolumeContext()[common.VolumeAttributePartition]; ok {
 		partition = part
 	}
-
 	devicePath, err := ns.getDevicePath(volumeID, partition)
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("Error when getting device path: %v", err))
 	}
 
-	klog.V(4).Infof("Successfully found attached GCE PD %q at device path %s.", volumeKey.Name, devicePath)
+	klog.V(4).Infof("Successfully found attached GCE PD %s at device path %s.", volumeID, devicePath)
 
 	// Part 2: Check if mount already exists at targetpath
 	notMnt, err := ns.Mounter.Interface.IsLikelyNotMountPoint(stagingTargetPath)
@@ -277,35 +274,24 @@ func (ns *GCENodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStage
 	}
 
 	if !notMnt {
-		// TODO(#95): Check who is mounted here. No error if its us
-		/*
-			1) Target Path MUST be the vol referenced by vol ID
-			2) VolumeCapability MUST match
-			3) Readonly MUST match
-
-		*/
+		// If mount already exists, verify that it is our mount
 		_, err := ns.DeviceUtils.VerifyExistingMount(ns.Mounter, devicePath, stagingTargetPath, false)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Found conflicting mountpoint at %s with error: %v", stagingTargetPath, err)
 		}
 		return &csi.NodeStageVolumeResponse{}, nil
-
 	}
 
 	// Part 3: Mount device to stagingTargetPath
 	// Default fstype is ext4
 	fstype := "ext4"
 	options := []string{}
-	if mnt := volumeCapability.GetMount(); mnt != nil {
-		if mnt.FsType != "" {
-			fstype = mnt.FsType
-		}
-		for _, flag := range mnt.MountFlags {
-			options = append(options, flag)
-		}
-	} else if blk := volumeCapability.GetBlock(); blk != nil {
-		// Noop for Block NodeStageVolume
-		return &csi.NodeStageVolumeResponse{}, nil
+	mnt := volumeCapability.GetMount()
+	if mnt.FsType != "" {
+		fstype = mnt.FsType
+	}
+	for _, flag := range mnt.MountFlags {
+		options = append(options, flag)
 	}
 
 	err = ns.Mounter.FormatAndMount(devicePath, stagingTargetPath, fstype, options)

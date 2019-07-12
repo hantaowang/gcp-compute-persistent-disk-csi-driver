@@ -117,6 +117,11 @@ func (m *deviceUtils) VerifyDevicePath(devicePaths []string) (string, error) {
 	return "", nil
 }
 
+/*
+	Verifies that a fs mount refers to the same device as the one we expect with the correct permissions
+	1) Target Path MUST be the vol referenced by vol ID
+	2) Readonly MUST match
+*/
 func (m *deviceUtils) VerifyExistingMount(mounter *mount.SafeFormatAndMount, devicePath, targetPath string, readOnly bool) (*mount.MountPoint, error) {
 	actualDevicePath, err := filepath.EvalSymlinks(devicePath)
 	if err != nil {
