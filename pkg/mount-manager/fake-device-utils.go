@@ -14,6 +14,10 @@ limitations under the License.
 
 package mountmanager
 
+import (
+	"k8s.io/kubernetes/pkg/util/mount"
+)
+
 type fakeDeviceUtils struct {
 }
 
@@ -33,4 +37,10 @@ func (m *fakeDeviceUtils) GetDiskByIdPaths(pdName string, partition string) []st
 func (m *fakeDeviceUtils) VerifyDevicePath(devicePaths []string) (string, error) {
 	// Return any random device path to use as mount source
 	return "/dev/disk/fake-path", nil
+}
+
+// VerifyExistingMount for a fake DeviceUtils works the same as the real DeviceUtils.
+// The caller should be using a fake Mounter.
+func (m *fakeDeviceUtils) VerifyExistingMount(mounter *mount.SafeFormatAndMount, devicePath, targetPath string, readOnly bool) (*mount.MountPoint, error) {
+	return NewDeviceUtils().VerifyExistingMount(mounter, devicePath, targetPath, readOnly)
 }

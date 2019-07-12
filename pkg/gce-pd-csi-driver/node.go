@@ -85,6 +85,24 @@ func (ns *GCENodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePub
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("VolumeCapability is invalid: %v", err))
 	}
 
+	// Perform a bind mount to the full path to allow duplicate mounts of the same PD.
+	fstype := ""
+	sourcePath := ""
+	options := []string{"bind"}
+	if readOnly {
+		options = append(options, "ro")
+	}
+
+	partition := ""
+	if part, ok := req.GetVolumeContext()[common.VolumeAttributePartition]; ok {
+		partition = part
+	}
+
+	sourcePath, err := ns.getDevicePath(volumeID, partition)
+	if err != nil {
+		return nil, status.Error(codes.Internal, fmt.Sprintf("Error when getting device path: %v", err))
+	}
+
 	notMnt, err := ns.Mounter.Interface.IsLikelyNotMountPoint(targetPath)
 	if err != nil && !os.IsNotExist(err) {
 		klog.Errorf("cannot validate mount point: %s %v", targetPath, err)
@@ -98,15 +116,11 @@ func (ns *GCENodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePub
 			3) Readonly MUST match
 
 		*/
+		_, err := ns.DeviceUtils.VerifyExistingMount(ns.Mounter, sourcePath, targetPath, readOnly)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Found conflicting mountpoint at %s with error: %v", targetPath, err)
+		}
 		return &csi.NodePublishVolumeResponse{}, nil
-	}
-
-	// Perform a bind mount to the full path to allow duplicate mounts of the same PD.
-	fstype := ""
-	sourcePath := ""
-	options := []string{"bind"}
-	if readOnly {
-		options = append(options, "ro")
 	}
 
 	if mnt := volumeCapability.GetMount(); mnt != nil {
@@ -131,16 +145,6 @@ func (ns *GCENodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePub
 		}
 	} else if blk := volumeCapability.GetBlock(); blk != nil {
 		klog.V(4).Infof("NodePublishVolume with block volume mode")
-
-		partition := ""
-		if part, ok := req.GetVolumeContext()[common.VolumeAttributePartition]; ok {
-			partition = part
-		}
-
-		sourcePath, err = ns.getDevicePath(volumeID, partition)
-		if err != nil {
-			return nil, status.Error(codes.Internal, fmt.Sprintf("Error when getting device path: %v", err))
-		}
 
 		// Expose block volume as file at target path
 		err = ns.Mounter.MakeFile(targetPath)
@@ -280,6 +284,10 @@ func (ns *GCENodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStage
 			3) Readonly MUST match
 
 		*/
+		_, err := ns.DeviceUtils.VerifyExistingMount(ns.Mounter, devicePath, stagingTargetPath, false)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Found conflicting mountpoint at %s with error: %v", stagingTargetPath, err)
+		}
 		return &csi.NodeStageVolumeResponse{}, nil
 
 	}

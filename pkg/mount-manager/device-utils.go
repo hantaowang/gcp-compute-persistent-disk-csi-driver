@@ -24,6 +24,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog"
+	"k8s.io/kubernetes/pkg/util/mount"
 )
 
 const (
@@ -58,6 +59,12 @@ type DeviceUtils interface {
 	// VerifyDevicePath returns the first of the list of device paths that
 	// exists on the machine, or an empty string if none exists
 	VerifyDevicePath(devicePaths []string) (string, error)
+
+	// VerifyExistingMount tries to find a mount point on the machine from the
+	// device at devicePath, which can be a symlink, to targetPath. It makes sure
+	// that this mount point has the same ro/rw property and returns it or an error
+	// if none exists.
+	VerifyExistingMount(mounter *mount.SafeFormatAndMount, devicePath, targetPath string, readOnly bool) (*mount.MountPoint, error)
 }
 
 type deviceUtils struct {
@@ -108,6 +115,29 @@ func (m *deviceUtils) VerifyDevicePath(devicePaths []string) (string, error) {
 	}
 
 	return "", nil
+}
+
+func (m *deviceUtils) VerifyExistingMount(mounter *mount.SafeFormatAndMount, devicePath, targetPath string, readOnly bool) (*mount.MountPoint, error) {
+	actualDevicePath, err := filepath.EvalSymlinks(devicePath)
+	if err != nil {
+		return nil, fmt.Errorf("error resolving device symlink: %v", devicePath)
+	}
+	allMountPoints, err := mounter.Interface.List()
+	if err != nil {
+		return nil, fmt.Errorf("error listing mounts: %v", err)
+	}
+	for _, mp := range allMountPoints {
+		if mp.Device == actualDevicePath && mp.Path == targetPath {
+			for _, opt := range mp.Opts {
+				if readOnly && opt == "ro" {
+					return &mp, nil
+				} else if !readOnly && opt == "rw" {
+					return &mp, nil
+				}
+			}
+		}
+	}
+	return nil, fmt.Errorf("could not verify mountpoint at %s for device %s", targetPath, devicePath)
 }
 
 // Triggers the application of udev rules by calling "udevadm trigger
