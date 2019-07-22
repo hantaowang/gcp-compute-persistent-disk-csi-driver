@@ -132,11 +132,13 @@ func downloadKubernetesSource(pkgDir, k8sIoDir, kubeVersion string) error {
 		vKubeVersion = "v" + kubeVersion
 	}
 	out, err := exec.Command("curl", "-L", fmt.Sprintf("https://github.com/kubernetes/kubernetes/archive/%s.tar.gz", vKubeVersion), "-o", kubeTarDir).CombinedOutput()
+	klog.V(4).Info(out)
 	if err != nil {
 		return fmt.Errorf("failed to curl kubernetes version %s: %s, err: %v", kubeVersion, out, err)
 	}
 
 	out, err = exec.Command("tar", "-C", k8sIoDir, "-xvf", kubeTarDir).CombinedOutput()
+	klog.V(4).Info(out)
 	if err != nil {
 		return fmt.Errorf("failed to untar %s: %s, err: %v", kubeTarDir, out, err)
 	}
